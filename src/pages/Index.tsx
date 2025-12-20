@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import SystemHeader from "@/components/dashboard/SystemHeader";
 import WaterLevelCard from "@/components/dashboard/WaterLevelCard";
 import RainStatusCard from "@/components/dashboard/RainStatusCard";
 import ValveStatusCard from "@/components/dashboard/ValveStatusCard";
+import WaterHistoryChart from "@/components/dashboard/WaterHistoryChart";
 
 /**
  * ESP32 Rainwater Harvesting Monitoring System Dashboard
@@ -16,18 +17,43 @@ import ValveStatusCard from "@/components/dashboard/ValveStatusCard";
  *   "rainStatus": true,    // true = raining, false = not raining
  *   "valveStatus": true    // true = open, false = closed
  * }
+ * 
+ * For historical data, you can either:
+ * 1. Store readings on ESP32 and expose via /api/history endpoint
+ * 2. Store in browser localStorage (current implementation)
  */
 
-// Placeholder variables for ESP32 sensor values
-// In production, these would be fetched from the ESP32 web server
 interface SensorData {
-  waterLevel: number;    // 0-100 percentage
-  rainStatus: boolean;   // true = raining, false = not raining
-  valveStatus: boolean;  // true = open, false = closed
+  waterLevel: number;
+  rainStatus: boolean;
+  valveStatus: boolean;
 }
 
+interface HistoricalDataPoint {
+  time: string;
+  level: number;
+  timestamp: number;
+}
+
+// Generate initial 24-hour historical data for demo
+const generateInitialHistory = (): HistoricalDataPoint[] => {
+  const data: HistoricalDataPoint[] = [];
+  const now = Date.now();
+  
+  for (let i = 23; i >= 0; i--) {
+    const timestamp = now - (i * 60 * 60 * 1000); // Each hour
+    const date = new Date(timestamp);
+    data.push({
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      level: Math.floor(Math.random() * 40) + 40, // 40-80%
+      timestamp,
+    });
+  }
+  
+  return data;
+};
+
 const Index = () => {
-  // State for sensor data
   const [sensorData, setSensorData] = useState<SensorData>({
     waterLevel: 65,
     rainStatus: true,
@@ -36,32 +62,61 @@ const Index = () => {
   
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>(generateInitialHistory);
 
-  // Auto-refresh every 2 seconds
+  // Add new data point to history (simulates hourly recording)
+  const addHistoricalDataPoint = useCallback((level: number) => {
+    setHistoricalData(prev => {
+      const now = Date.now();
+      const lastPoint = prev[prev.length - 1];
+      
+      // Only add new point if at least 1 minute has passed (for demo, use 1 min instead of 1 hour)
+      if (lastPoint && now - lastPoint.timestamp < 60 * 1000) {
+        // Update the last point with current level
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...lastPoint,
+          level,
+        };
+        return updated;
+      }
+      
+      const newPoint: HistoricalDataPoint = {
+        time: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        level,
+        timestamp: now,
+      };
+      
+      // Keep last 24 data points
+      const updated = [...prev, newPoint];
+      if (updated.length > 24) {
+        updated.shift();
+      }
+      
+      return updated;
+    });
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         /**
          * ESP32 INTEGRATION:
-         * Uncomment and modify the following code to fetch from your ESP32:
-         * 
          * const response = await fetch('/api/data');
          * const data = await response.json();
-         * setSensorData({
-         *   waterLevel: data.waterLevel,
-         *   rainStatus: data.rainStatus,
-         *   valveStatus: data.valveStatus
-         * });
-         * setIsConnected(true);
+         * setSensorData(data);
          */
         
         // Simulated data for demonstration
-        // Remove this block when connecting to actual ESP32
+        const newLevel = Math.floor(Math.random() * 40) + 50;
         setSensorData({
-          waterLevel: Math.floor(Math.random() * 40) + 50, // 50-90%
+          waterLevel: newLevel,
           rainStatus: Math.random() > 0.3,
           valveStatus: Math.random() > 0.4,
         });
+        
+        // Record to history
+        addHistoricalDataPoint(newLevel);
         
         setLastUpdate(new Date());
         setIsConnected(true);
@@ -71,36 +126,33 @@ const Index = () => {
       }
     };
 
-    // Initial fetch
     fetchData();
-
-    // Set up interval for auto-refresh every 2 seconds
     const interval = setInterval(fetchData, 2000);
-
-    // Cleanup interval on component unmount
     return () => clearInterval(interval);
-  }, []);
+  }, [addHistoricalDataPoint]);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Background glow effect */}
       <div className="fixed inset-0 background-glow pointer-events-none" />
       
       <div className="relative z-10 container mx-auto px-4 py-8 max-w-4xl">
         <SystemHeader lastUpdate={lastUpdate} isConnected={isConnected} />
         
         <main className="space-y-6">
-          {/* Water Level - Full width */}
           <WaterLevelCard level={sensorData.waterLevel} />
           
-          {/* Rain and Valve Status - Side by side on larger screens */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <RainStatusCard isRaining={sensorData.rainStatus} />
             <ValveStatusCard isOpen={sensorData.valveStatus} />
           </div>
+          
+          {/* Historical Chart */}
+          <WaterHistoryChart 
+            currentLevel={sensorData.waterLevel} 
+            historicalData={historicalData.map(d => ({ time: d.time, level: d.level }))} 
+          />
         </main>
         
-        {/* Footer */}
         <footer className="mt-12 text-center text-muted-foreground text-sm animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
           <p>ESP32 Rainwater Harvesting System • Auto-refresh: 2s</p>
         </footer>
