@@ -57,13 +57,37 @@ serve(async (req) => {
 
     // POST: Add new sensor reading from ESP32
     if (req.method === 'POST') {
-      const { waterLevel, rainStatus, valveStatus } = await req.json();
+      const body = await req.json();
       
-      console.log('Received sensor data:', { waterLevel, rainStatus, valveStatus });
+      console.log('Received raw data from ESP32:', body);
+
+      // Map ESP32 field names to internal format
+      // ESP32 sends: { rain: 0|1, water_level: number, valve: "OPEN"|"CLOSE", buzzer: "ON"|"OFF" }
+      // We store: { waterLevel: number, rainStatus: boolean, valveStatus: boolean }
+      
+      let waterLevel: number;
+      let rainStatus: boolean;
+      let valveStatus: boolean;
+
+      // Handle ESP32 format (rain, water_level, valve)
+      if ('water_level' in body || 'rain' in body || 'valve' in body) {
+        waterLevel = body.water_level ?? body.waterLevel ?? 0;
+        rainStatus = body.rain === 1 || body.rain === true;
+        valveStatus = body.valve === 'OPEN' || body.valve === true;
+        console.log('Parsed ESP32 format:', { waterLevel, rainStatus, valveStatus });
+      } 
+      // Handle original format (waterLevel, rainStatus, valveStatus)
+      else {
+        waterLevel = body.waterLevel ?? 0;
+        rainStatus = body.rainStatus === true;
+        valveStatus = body.valveStatus === true;
+        console.log('Parsed standard format:', { waterLevel, rainStatus, valveStatus });
+      }
 
       // Validate input
       if (typeof waterLevel !== 'number' || waterLevel < 0 || waterLevel > 100) {
-        return new Response(JSON.stringify({ error: 'Invalid waterLevel (0-100)' }), {
+        console.log('Invalid waterLevel:', waterLevel);
+        return new Response(JSON.stringify({ error: 'Invalid waterLevel (0-100)', received: waterLevel }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -71,6 +95,8 @@ serve(async (req) => {
 
       const timestamp = new Date().toISOString();
       const newLine = `${timestamp},${waterLevel},${rainStatus},${valveStatus}\n`;
+
+      console.log('New CSV line:', newLine);
 
       // Try to get existing CSV content
       let csvContent = CSV_HEADER;
@@ -101,14 +127,14 @@ serve(async (req) => {
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        return new Response(JSON.stringify({ error: 'Failed to save data' }), {
+        return new Response(JSON.stringify({ error: 'Failed to save data', details: uploadError.message }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
       console.log('Sensor data saved successfully');
-      return new Response(JSON.stringify({ success: true, timestamp }), {
+      return new Response(JSON.stringify({ success: true, timestamp, waterLevel, rainStatus, valveStatus }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
