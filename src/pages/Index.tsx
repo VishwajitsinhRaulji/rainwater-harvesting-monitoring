@@ -19,19 +19,15 @@ import { useSensorData } from "@/hooks/useSensorData";
 const Index = () => {
   const { readings, latestReading, isLoading, isConnected, downloadCSV } = useSensorData();
 
-  // Get current sensor values - default to 0/false when no data
+  // Show live data only in the history chart.
+  // The summary cards stay at defaults (0%, Not Raining, CLOSED).
   const currentData = useMemo(() => ({
-    waterLevel: latestReading?.waterLevel ?? 0,
-    rainStatus: latestReading?.rainStatus ?? false,
-    valveStatus: latestReading?.valveStatus ?? false,
-  }), [latestReading]);
+    waterLevel: 0,
+    rainStatus: false,
+    valveStatus: false,
+  }), []);
 
-  const lastUpdate = useMemo(() => {
-    if (latestReading?.timestamp) {
-      return new Date(latestReading.timestamp);
-    }
-    return null;
-  }, [latestReading]);
+  const lastUpdate = useMemo(() => null, []);
 
   if (isLoading) {
     return (
