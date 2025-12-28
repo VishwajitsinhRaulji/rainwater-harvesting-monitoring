@@ -19,14 +19,12 @@ import { useSensorData } from "@/hooks/useSensorData";
 const Index = () => {
   const { readings, latestReading, isLoading, isConnected, downloadCSV } = useSensorData();
 
-  const hasData = latestReading !== null;
-
-  // Get current sensor values - use null when no data to show "awaiting" state
+  // Get current sensor values - default to 0/false when no data
   const currentData = useMemo(() => ({
-    waterLevel: hasData ? latestReading.waterLevel : null,
-    rainStatus: hasData ? latestReading.rainStatus : null,
-    valveStatus: hasData ? latestReading.valveStatus : null,
-  }), [latestReading, hasData]);
+    waterLevel: latestReading?.waterLevel ?? 0,
+    rainStatus: latestReading?.rainStatus ?? false,
+    valveStatus: latestReading?.valveStatus ?? false,
+  }), [latestReading]);
 
   const lastUpdate = useMemo(() => {
     if (latestReading?.timestamp) {
