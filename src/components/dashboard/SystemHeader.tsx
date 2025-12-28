@@ -1,7 +1,7 @@
 import { Activity, Wifi } from "lucide-react";
 
 interface SystemHeaderProps {
-  lastUpdate: Date;
+  lastUpdate: Date | null;
   isConnected: boolean;
 }
 
@@ -34,7 +34,7 @@ const SystemHeader = ({ lastUpdate, isConnected }: SystemHeaderProps) => {
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Last Update</p>
             <p className="text-sm font-mono text-foreground">
-              {lastUpdate.toLocaleTimeString()}
+              {lastUpdate ? lastUpdate.toLocaleTimeString() : '--:--:--'}
             </p>
           </div>
         </div>
